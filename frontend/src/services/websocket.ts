@@ -21,8 +21,8 @@ export function createGameSocket(
   onClose?: () => void
 ): WebSocket {
   const socket = new WebSocket(
-    `${WS_URL}/games/${gameId}/ws/${playerId}`
-  );
+  `ws://localhost:8080/games/${gameId}/ws/${playerId}`
+);
 
   socket.onopen = () => {
     console.log("WebSocket connected");
