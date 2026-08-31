@@ -1,9 +1,14 @@
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+
 import uuid
+
 from app.rooms import create_game, get_game, save_game
 from app.websocket_manager import manager
+
+
 app = FastAPI()
+
 
 app.add_middleware(
     CORSMiddleware,
@@ -13,11 +18,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 @app.get("/health")
 def health():
     return {
         "status": "ok"
     }
+
 
 @app.post("/games")
 def create_new_game():
@@ -36,7 +43,7 @@ def create_new_game():
 
 
 @app.post("/games/{game_id}/join")
-def join_game(game_id: str):
+async def join_game(game_id: str):
     game = get_game(game_id)
 
     if game is None:
@@ -53,9 +60,26 @@ def join_game(game_id: str):
 
     player_id = str(uuid.uuid4())
 
+    # Update the complete game state BEFORE saving.
     game.player2 = player_id
-    save_game(game)
     game.status = "playing"
+
+    # Persist the new state to Redis.
+    save_game(game)
+
+    # Tell any already-connected player that the game has started.
+    # This works because GoLoad will route all traffic for this
+    # game ID to the same FastAPI instance.
+    await manager.broadcast(
+        game_id,
+        {
+            "type": "game_state",
+            "board": game.board,
+            "turn": game.turn,
+            "winner": game.winner,
+            "status": game.status,
+        }
+    )
 
     return {
         "game_id": game.room_id,
@@ -89,14 +113,14 @@ async def game_websocket(
     game_id: str,
     player_id: str
 ):
+    # Always validate against the shared Redis state.
     game = get_game(game_id)
 
-    # Game doesn't exist
     if game is None:
         await websocket.close(code=4004)
         return
 
-    # Player ID doesn't belong to this game
+    # Player ID must belong to this game.
     if player_id not in [game.player1, game.player2]:
         await websocket.close(code=4003)
         return
@@ -107,7 +131,9 @@ async def game_websocket(
         websocket
     )
 
-    # Immediately send current game state
+    # Send the latest state immediately after connection.
+    game = get_game(game_id)
+
     await websocket.send_json({
         "type": "game_state",
         "board": game.board,
@@ -119,6 +145,20 @@ async def game_websocket(
     try:
         while True:
             data = await websocket.receive_json()
+
+            # IMPORTANT:
+            # Reload from Redis for every incoming action.
+            #
+            # Another FastAPI request may have changed this game
+            # since this WebSocket originally connected.
+            game = get_game(game_id)
+
+            if game is None:
+                await websocket.send_json({
+                    "type": "error",
+                    "message": "Game no longer exists"
+                })
+                continue
 
             message_type = data.get("type")
 
@@ -132,7 +172,7 @@ async def game_websocket(
                     })
                     continue
 
-                # Make sure game has started
+                # Make sure both players have joined.
                 if game.status != "playing":
                     await websocket.send_json({
                         "type": "error",
@@ -140,7 +180,7 @@ async def game_websocket(
                     })
                     continue
 
-                # Check whose turn it is
+                # Determine whose turn it currently is.
                 if game.turn == 1:
                     expected_player = game.player1
                 else:
@@ -153,9 +193,11 @@ async def game_websocket(
                     })
                     continue
 
-                # Try to make the move
                 try:
                     game.make_move(column)
+
+                    # Persist the move so every FastAPI instance
+                    # has the same game state.
                     save_game(game)
 
                 except ValueError as e:
@@ -165,7 +207,9 @@ async def game_websocket(
                     })
                     continue
 
-                # Send updated game to BOTH players
+                # Both players for this game should be connected
+                # to the same FastAPI node through GoLoad's
+                # consistent hashing.
                 await manager.broadcast(
                     game_id,
                     {

@@ -1,6 +1,8 @@
 import type { GameState } from "../types/game";
 
-const WS_URL = "ws://localhost:8000";
+const WS_URL =
+  import.meta.env.VITE_WS_URL ||
+  "ws://localhost:8080";
 
 export type GameMessage =
   | ({
@@ -21,8 +23,8 @@ export function createGameSocket(
   onClose?: () => void
 ): WebSocket {
   const socket = new WebSocket(
-  `ws://localhost:8080/games/${gameId}/ws/${playerId}`
-);
+    `${WS_URL}/games/${gameId}/ws/${playerId}`
+  );
 
   socket.onopen = () => {
     console.log("WebSocket connected");
@@ -36,11 +38,16 @@ export function createGameSocket(
   };
 
   socket.onerror = (error) => {
-    console.error("WebSocket error:", error);
+    console.error(
+      "WebSocket error:",
+      error
+    );
   };
 
   socket.onclose = () => {
-    console.log("WebSocket disconnected");
+    console.log(
+      "WebSocket disconnected"
+    );
 
     if (onClose) {
       onClose();
@@ -54,7 +61,9 @@ export function sendMove(
   socket: WebSocket,
   column: number
 ) {
-  if (socket.readyState !== WebSocket.OPEN) {
+  if (
+    socket.readyState !== WebSocket.OPEN
+  ) {
     return;
   }
 
@@ -66,8 +75,12 @@ export function sendMove(
   );
 }
 
-export function sendPing(socket: WebSocket) {
-  if (socket.readyState !== WebSocket.OPEN) {
+export function sendPing(
+  socket: WebSocket
+) {
+  if (
+    socket.readyState !== WebSocket.OPEN
+  ) {
     return;
   }
 

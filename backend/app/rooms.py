@@ -1,13 +1,20 @@
 import json
+import os
 import random
 import string
+
 import redis
 
 from app.game import Game
 
+
+REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
+REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
+
+
 redis_client = redis.Redis(
-    host="localhost",
-    port=6379,
+    host=REDIS_HOST,
+    port=REDIS_PORT,
     decode_responses=True,
 )
 
@@ -29,21 +36,28 @@ def save_game(game: Game):
 
 
 def get_game(room_id: str):
-    data = redis_client.get(f"game:{room_id}")
+    data = redis_client.get(
+        f"game:{room_id}"
+    )
 
     if data is None:
         return None
 
-    return Game.from_dict(json.loads(data))
+    return Game.from_dict(
+        json.loads(data)
+    )
 
 
 def create_game():
     room_id = generate_room_id()
 
-    while redis_client.exists(f"game:{room_id}"):
+    while redis_client.exists(
+        f"game:{room_id}"
+    ):
         room_id = generate_room_id()
 
     game = Game(room_id)
+
     save_game(game)
 
     return game
