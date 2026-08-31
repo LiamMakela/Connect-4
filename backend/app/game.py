@@ -48,3 +48,26 @@ class Game:
     def check_winner(self, player: int):
         # plug your existing winner-check code in here
         return False
+
+    def to_dict(self):
+        return {
+            "room_id": self.room_id,
+            "board": self.board,
+            "player1": self.player1,
+            "player2": self.player2,
+            "turn": self.turn,
+            "winner": self.winner,
+            "status": self.status,
+        }
+
+    @classmethod
+    def from_dict(cls, data):
+        game = cls(data["room_id"])
+        game.board = data["board"]
+        game.player1 = data["player1"]
+        game.player2 = data["player2"]
+        game.turn = data["turn"]
+        game.winner = data["winner"]
+        game.status = data["status"]
+        return game
+    

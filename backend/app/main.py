@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 import uuid
-from app.rooms import create_game, get_game
+from app.rooms import create_game, get_game, save_game
 from app.websocket_manager import manager
 app = FastAPI()
 
@@ -26,6 +26,7 @@ def create_new_game():
     player_id = str(uuid.uuid4())
 
     game.player1 = player_id
+    save_game(game)
 
     return {
         "game_id": game.room_id,
@@ -53,6 +54,7 @@ def join_game(game_id: str):
     player_id = str(uuid.uuid4())
 
     game.player2 = player_id
+    save_game(game)
     game.status = "playing"
 
     return {
@@ -154,6 +156,7 @@ async def game_websocket(
                 # Try to make the move
                 try:
                     game.make_move(column)
+                    save_game(game)
 
                 except ValueError as e:
                     await websocket.send_json({

@@ -1,12 +1,15 @@
-# rooms.py
-
+import json
 import random
 import string
+import redis
 
 from app.game import Game
 
-
-games: dict[str, Game] = {}
+redis_client = redis.Redis(
+    host="localhost",
+    port=6379,
+    decode_responses=True,
+)
 
 
 def generate_room_id():
@@ -18,18 +21,29 @@ def generate_room_id():
     )
 
 
-def create_game():
-    room_id = generate_room_id()
-
-    while room_id in games:
-        room_id = generate_room_id()
-
-    game = Game(room_id)
-
-    games[room_id] = game
-
-    return game
+def save_game(game: Game):
+    redis_client.set(
+        f"game:{game.room_id}",
+        json.dumps(game.to_dict())
+    )
 
 
 def get_game(room_id: str):
-    return games.get(room_id)
+    data = redis_client.get(f"game:{room_id}")
+
+    if data is None:
+        return None
+
+    return Game.from_dict(json.loads(data))
+
+
+def create_game():
+    room_id = generate_room_id()
+
+    while redis_client.exists(f"game:{room_id}"):
+        room_id = generate_room_id()
+
+    game = Game(room_id)
+    save_game(game)
+
+    return game
