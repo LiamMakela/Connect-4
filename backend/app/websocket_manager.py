@@ -1,60 +1,60 @@
-# websocket_manager.py
-
 from fastapi import WebSocket
 
 
 class ConnectionManager:
     def __init__(self):
-        # {
-        #   "ROOM1": {
-        #       "player-id-1": websocket,
-        #       "player-id-2": websocket
-        #   }
-        # }
-        self.connections: dict[str, dict[str, WebSocket]] = {}
+        self.connections: dict[
+            str,
+            dict[str, WebSocket],
+        ] = {}
 
     async def connect(
         self,
         room_id: str,
         player_id: str,
-        websocket: WebSocket
+        websocket: WebSocket,
     ):
         await websocket.accept()
 
-        if room_id not in self.connections:
-            self.connections[room_id] = {}
+        room = self.connections.setdefault(
+            room_id,
+            {},
+        )
 
-        self.connections[room_id][player_id] = websocket
+        room[player_id] = websocket
 
-    def disconnect(self, room_id: str, player_id: str):
-        if room_id not in self.connections:
-            return
-
-        self.connections[room_id].pop(player_id, None)
-
-        if len(self.connections[room_id]) == 0:
-            del self.connections[room_id]
-
-    async def send_to_player(
+    def disconnect(
         self,
         room_id: str,
         player_id: str,
-        message: dict
     ):
-        if room_id not in self.connections:
+        room = self.connections.get(room_id)
+
+        if room is None:
             return
 
-        websocket = self.connections[room_id].get(player_id)
+        room.pop(player_id, None)
 
-        if websocket:
-            await websocket.send_json(message)
+        if not room:
+            self.connections.pop(
+                room_id,
+                None,
+            )
 
-    async def broadcast(self, room_id: str, message: dict):
-        if room_id not in self.connections:
-            return
+    async def broadcast(
+        self,
+        room_id: str,
+        message: dict,
+    ):
+        room = self.connections.get(
+            room_id,
+            {},
+        )
 
-        for websocket in self.connections[room_id].values():
-            await websocket.send_json(message)
+        for websocket in room.values():
+            await websocket.send_json(
+                message
+            )
 
 
 manager = ConnectionManager()

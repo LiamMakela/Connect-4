@@ -8,36 +8,38 @@ import redis
 from app.game import Game
 
 
-REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
-REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
-
-
 redis_client = redis.Redis(
-    host=REDIS_HOST,
-    port=REDIS_PORT,
+    host=os.getenv("REDIS_HOST", "localhost"),
+    port=int(os.getenv("REDIS_PORT", "6379")),
     decode_responses=True,
 )
 
 
-def generate_room_id():
+def game_key(room_id: str) -> str:
+    return f"game:{room_id}"
+
+
+def generate_room_id() -> str:
+    characters = (
+        string.ascii_uppercase
+        + string.digits
+    )
+
     return "".join(
-        random.choices(
-            string.ascii_uppercase + string.digits,
-            k=6
-        )
+        random.choices(characters, k=6)
     )
 
 
 def save_game(game: Game):
     redis_client.set(
-        f"game:{game.room_id}",
-        json.dumps(game.to_dict())
+        game_key(game.room_id),
+        json.dumps(game.to_dict()),
     )
 
 
 def get_game(room_id: str):
     data = redis_client.get(
-        f"game:{room_id}"
+        game_key(room_id)
     )
 
     if data is None:
@@ -48,15 +50,17 @@ def get_game(room_id: str):
     )
 
 
-def create_game():
-    room_id = generate_room_id()
-
-    while redis_client.exists(
-        f"game:{room_id}"
-    ):
+def create_game(player1_id: str):
+    while True:
         room_id = generate_room_id()
 
+        if not redis_client.exists(
+            game_key(room_id)
+        ):
+            break
+
     game = Game(room_id)
+    game.player1 = player1_id
 
     save_game(game)
 

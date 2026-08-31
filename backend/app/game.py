@@ -1,13 +1,21 @@
-class Game:
-    ROWS = 6
-    COLUMNS = 7
+ROWS = 6
+COLUMNS = 7
+EMPTY = 0
 
+DIRECTIONS = (
+    (0, 1),   # horizontal
+    (1, 0),   # vertical
+    (1, 1),   # diagonal down-right
+    (1, -1),  # diagonal down-left
+)
+
+
+class Game:
     def __init__(self, room_id: str):
         self.room_id = room_id
-
         self.board = [
-            [0] * self.COLUMNS
-            for _ in range(self.ROWS)
+            [EMPTY] * COLUMNS
+            for _ in range(ROWS)
         ]
 
         self.player1 = None
@@ -17,143 +25,96 @@ class Game:
         self.winner = None
         self.status = "waiting"
 
+    @property
+    def current_player_id(self):
+        return (
+            self.player1
+            if self.turn == 1
+            else self.player2
+        )
+
     def make_move(self, column: int):
         if self.status != "playing":
-            raise ValueError("Game is not currently playing")
+            raise ValueError(
+                "Game is not currently playing"
+            )
 
-        if column < 0 or column >= self.COLUMNS:
+        if (
+            type(column) is not int
+            or not 0 <= column < COLUMNS
+        ):
             raise ValueError("Invalid column")
 
-        if self.winner is not None:
-            raise ValueError("Game is already over")
-
-        row = None
-
-        # Start at the bottom and find the first empty slot.
-        for r in range(self.ROWS - 1, -1, -1):
-            if self.board[r][column] == 0:
-                row = r
-                break
+        row = next(
+            (
+                row
+                for row in range(ROWS - 1, -1, -1)
+                if self.board[row][column] == EMPTY
+            ),
+            None,
+        )
 
         if row is None:
             raise ValueError("Column is full")
 
         player = self.turn
-
         self.board[row][column] = player
 
-        if self.check_winner(row, column, player):
+        if self.check_winner(player):
             self.winner = player
             self.status = "finished"
-            return
-
-        if self.is_draw():
+        elif self.is_draw():
             self.status = "finished"
-            return
+        else:
+            self.turn = 2 if player == 1 else 1
 
-        self.turn = 2 if self.turn == 1 else 1
-
-    def check_winner(
-        self,
-        row: int,
-        column: int,
-        player: int
-    ) -> bool:
-        """
-        Check all four possible Connect-4 directions:
-
-        horizontal
-        vertical
-        diagonal \
-        diagonal /
-        """
-
-        directions = [
-            (0, 1),
-            (1, 0),
-            (1, 1),
-            (1, -1),
-        ]
-
-        for row_direction, column_direction in directions:
-            count = 1
-
-            # Look in the positive direction.
-            count += self._count_direction(
-                row,
-                column,
-                row_direction,
-                column_direction,
-                player,
-            )
-
-            # Look in the negative direction.
-            count += self._count_direction(
-                row,
-                column,
-                -row_direction,
-                -column_direction,
-                player,
-            )
-
-            if count >= 4:
-                return True
+    def check_winner(self, player: int) -> bool:
+        for row in range(ROWS):
+            for column in range(COLUMNS):
+                for row_step, column_step in DIRECTIONS:
+                    if all(
+                        0 <= row + i * row_step < ROWS
+                        and 0 <= column + i * column_step < COLUMNS
+                        and self.board[
+                            row + i * row_step
+                        ][
+                            column + i * column_step
+                        ] == player
+                        for i in range(4)
+                    ):
+                        return True
 
         return False
 
-    def _count_direction(
-        self,
-        row: int,
-        column: int,
-        row_direction: int,
-        column_direction: int,
-        player: int
-    ) -> int:
-        count = 0
-
-        current_row = row + row_direction
-        current_column = column + column_direction
-
-        while (
-            0 <= current_row < self.ROWS
-            and 0 <= current_column < self.COLUMNS
-            and self.board[current_row][current_column] == player
-        ):
-            count += 1
-
-            current_row += row_direction
-            current_column += column_direction
-
-        return count
-
     def is_draw(self) -> bool:
-        """
-        The board is full if every cell in the top row
-        contains a piece.
-        """
         return all(
-            self.board[0][column] != 0
-            for column in range(self.COLUMNS)
+            cell != EMPTY
+            for cell in self.board[0]
         )
+
+    def public_state(self):
+        return {
+            "board": self.board,
+            "turn": self.turn,
+            "winner": self.winner,
+            "status": self.status,
+        }
 
     def to_dict(self):
         return {
             "room_id": self.room_id,
-            "board": self.board,
             "player1": self.player1,
             "player2": self.player2,
-            "turn": self.turn,
-            "winner": self.winner,
-            "status": self.status,
+            **self.public_state(),
         }
 
     @classmethod
     def from_dict(cls, data):
         game = cls(data["room_id"])
 
-        game.board = data["board"]
         game.player1 = data["player1"]
         game.player2 = data["player2"]
+        game.board = data["board"]
         game.turn = data["turn"]
         game.winner = data["winner"]
         game.status = data["status"]

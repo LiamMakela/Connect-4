@@ -1,7 +1,10 @@
+import pytest
+
 from app.game import Game
 
 
-def create_started_game():
+@pytest.fixture
+def game():
     game = Game("TEST01")
     game.player1 = "player-1"
     game.player2 = "player-2"
@@ -10,85 +13,51 @@ def create_started_game():
     return game
 
 
-def test_horizontal_win():
-    game = create_started_game()
-
-    moves = [
-        0, 0,
-        1, 1,
-        2, 2,
-        3,
-    ]
-
+def play(game, moves):
     for column in moves:
         game.make_move(column)
+
+
+@pytest.mark.parametrize(
+    "moves",
+    [
+        # Horizontal
+        [0, 0, 1, 1, 2, 2, 3],
+
+        # Vertical
+        [0, 1, 0, 1, 0, 1, 0],
+
+        # Diagonal
+        [
+            0, 1,
+            1, 2,
+            4, 2,
+            2, 3,
+            4, 3,
+            5, 3,
+            3,
+        ],
+    ],
+)
+def test_player_one_wins(
+    game,
+    moves,
+):
+    play(game, moves)
 
     assert game.winner == 1
     assert game.status == "finished"
 
 
-def test_vertical_win():
-    game = create_started_game()
-
-    moves = [
-        0, 1,
-        0, 1,
-        0, 1,
-        0,
-    ]
-
-    for column in moves:
-        game.make_move(column)
-
-    assert game.winner == 1
-    assert game.status == "finished"
-
-
-def test_diagonal_win():
-    game = create_started_game()
-
-    moves = [
-        0, 1,
-        1, 2,
-        4, 2,
-        2, 3,
-        4, 3,
-        5, 3,
-        3,
-    ]
-
-    for column in moves:
-        game.make_move(column)
-
-    assert game.winner == 1
-    assert game.status == "finished"
-
-
-def test_turn_switches():
-    game = create_started_game()
-
-    assert game.turn == 1
-
+def test_turn_switches(game):
     game.make_move(0)
-
     assert game.turn == 2
 
     game.make_move(1)
-
     assert game.turn == 1
 
 
-def test_piece_falls_to_bottom():
-    game = create_started_game()
-
-    game.make_move(3)
-
-    assert game.board[5][3] == 1
-
-
-def test_pieces_stack():
-    game = create_started_game()
-
+def test_pieces_fall_and_stack(game):
     game.make_move(3)
     game.make_move(3)
 
@@ -96,42 +65,33 @@ def test_pieces_stack():
     assert game.board[4][3] == 2
 
 
-def test_invalid_column():
-    game = create_started_game()
-
-    try:
+def test_invalid_column(game):
+    with pytest.raises(
+        ValueError,
+        match="Invalid column",
+    ):
         game.make_move(10)
-        assert False
-    except ValueError as error:
-        assert str(error) == "Invalid column"
 
 
-def test_full_column():
-    game = create_started_game()
+def test_full_column(game):
+    play(
+        game,
+        [0, 0, 0, 0, 0, 0],
+    )
 
-    for _ in range(6):
+    with pytest.raises(
+        ValueError,
+        match="Column is full",
+    ):
         game.make_move(0)
 
-    try:
-        game.make_move(0)
-        assert False
-    except ValueError as error:
-        assert str(error) == "Column is full"
 
-
-def test_serialization_round_trip():
-    game = create_started_game()
-
+def test_serialization(game):
     game.make_move(3)
     game.make_move(4)
 
-    data = game.to_dict()
+    restored = Game.from_dict(
+        game.to_dict()
+    )
 
-    restored = Game.from_dict(data)
-
-    assert restored.room_id == game.room_id
-    assert restored.board == game.board
-    assert restored.turn == game.turn
-    assert restored.status == game.status
-    assert restored.player1 == game.player1
-    assert restored.player2 == game.player2
+    assert restored.to_dict() == game.to_dict()
