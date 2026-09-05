@@ -32,8 +32,9 @@ def generate_room_id() -> str:
 
 def save_game(game: Game):
     redis_client.set(
-        game_key(game.room_id),
-        json.dumps(game.to_dict()),
+    game_key(game.room_id),
+    json.dumps(game.to_dict()),
+    ex=86400,
     )
 
 
